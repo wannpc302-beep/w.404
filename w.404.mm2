@@ -1,0 +1,628 @@
+-- =====================================================
+-- Script Name : w.404 | MM2 Hub v2.0 (Part 1/4)
+-- =====================================================
+
+local ORION_URL = "https://raw.githubusercontent.com/Qanuir/orion-ui/refs/heads/main/source.lua"
+local MINI_IMAGE = "rbxassetid://116990467705581"
+
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local GuiService = game:GetService("GuiService")
+local LocalPlayer = Players.LocalPlayer
+
+if not LocalPlayer then
+    warn("[w.404] LocalPlayer is unavailable. Run this after joining a game.")
+    return
+end
+
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+local oldStatus = PlayerGui:FindFirstChild("w404_StatusUI")
+if oldStatus then oldStatus:Destroy() end
+
+local statusGui = Instance.new("ScreenGui")
+statusGui.Name = "w404_StatusUI"
+statusGui.ResetOnSpawn = false
+statusGui.IgnoreGuiInset = true
+statusGui.DisplayOrder = 10000
+statusGui.Parent = PlayerGui
+
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Name = "Status"
+statusLabel.AnchorPoint = Vector2.new(0.5, 0)
+statusLabel.Position = UDim2.new(0.5, 0, 0, 12)
+statusLabel.Size = UDim2.new(0.94, 0, 0, 76)
+statusLabel.BackgroundColor3 = Color3.fromRGB(15, 25, 42)
+statusLabel.BackgroundTransparency = 0.08
+statusLabel.BorderSizePixel = 0
+statusLabel.TextColor3 = Color3.fromRGB(225, 242, 255)
+statusLabel.TextSize = 15
+statusLabel.Font = Enum.Font.GothamBold
+statusLabel.TextWrapped = true
+statusLabel.Text = "w.404: กำลังเริ่มต้นระบบอัปเดต..."
+statusLabel.Parent = statusGui
+
+local statusCorner = Instance.new("UICorner")
+statusCorner.CornerRadius = UDim.new(0, 10)
+statusCorner.Parent = statusLabel
+
+local function showStatus(message, isError)
+    statusLabel.Text = tostring(message)
+    statusLabel.BackgroundColor3 = isError
+        and Color3.fromRGB(110, 30, 35)
+        or Color3.fromRGB(15, 75, 110)
+    statusLabel.Visible = true
+    if not isError then
+        task.delay(3, function()
+            if statusGui and statusGui.Parent then
+                statusGui:Destroy()
+            end
+        end)
+    end
+end
+
+-- Load Orion Library
+local loadOk, OrionLibOrError = pcall(function()
+    assert(type(loadstring) == "function", "Executor ไม่มี loadstring")
+    local source = game:HttpGet(ORION_URL)
+    assert(type(source) == "string" and #source > 1000, "ดาวน์โหลด Orion ไม่สำเร็จหรือไฟล์ว่าง")
+
+    source = source:gsub("if syn then", 'if syn and type(syn.protect_gui) == "function" then', 1)
+    source = source:gsub(
+        "Orion.Parent = gethui%(%) or game.CoreGui",
+        'Orion.Parent = (type(gethui) == "function" and gethui()) or game.CoreGui',
+        1
+    )
+
+    local chunk, compileError = loadstring(source)
+    assert(type(chunk) == "function", tostring(compileError or "คอมไพล์ Orion ไม่สำเร็จ"))
+
+    local library = chunk()
+    assert(type(library) == "table", "Orion ไม่ได้คืนค่าเป็น library")
+    return library
+end)
+
+if not loadOk then
+    local errText = "W404 ERROR: โหลด Orion ไม่สำเร็จ\n" .. tostring(OrionLibOrError)
+    warn(errText)
+    showStatus(errText, true)
+    return
+end
+
+local OrionLib = OrionLibOrError
+-- =====================================================
+-- Script Name : w.404 | MM2 Hub v2.0 (Part 2/4)
+-- =====================================================
+
+local setupOk, setupError = pcall(function()
+    -- States
+    local espEnabled = false
+    local aimbotMode = "ปิด"
+    local lockTargetEnabled = false
+    local wallCheckEnabled = true
+    local fovVisible = false
+    local fovRadius = 150
+    local fovColorMode = "เหลืองอ่อน"
+    
+    local flyEnabled = false
+    local flySpeed = 50
+    local infJumpEnabled = false
+    local jumpPowerVal = 50
+    local noclipEnabled = false
+    local autoGunEnabled = false
+
+    local espHighlights = {}
+    local espBillboards = {}
+
+    local canSaveConfig = type(isfolder) == "function"
+        and type(makefolder) == "function"
+        and type(writefile) == "function"
+        and type(isfile) == "function"
+        and type(readfile) == "function"
+
+    local Window = OrionLib:MakeWindow({
+        Name = "w.404 | MM2 Hub v2.0",
+        HidePremium = false,
+        SaveConfig = canSaveConfig,
+        ConfigFolder = "w404_MM2_V2",
+        IntroEnabled = false
+    })
+
+    -- Floating UI & Action Button 🎯
+    local oldMini = PlayerGui:FindFirstChild("w404_MiniUI")
+    if oldMini then oldMini:Destroy() end
+
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "w404_MiniUI"
+    screenGui.ResetOnSpawn = false
+    screenGui.IgnoreGuiInset = true
+    screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    screenGui.DisplayOrder = 9999
+    screenGui.Parent = PlayerGui
+
+    -- FOV Ring
+    local fovFrame = Instance.new("Frame")
+    fovFrame.Name = "FOVCircle"
+    fovFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+    fovFrame.Size = UDim2.fromOffset(fovRadius * 2, fovRadius * 2)
+    fovFrame.BackgroundTransparency = 1
+    fovFrame.BorderSizePixel = 0
+    fovFrame.Visible = false
+    fovFrame.ZIndex = 1
+    fovFrame.Parent = screenGui
+
+    local fovCorner = Instance.new("UICorner")
+    fovCorner.CornerRadius = UDim.new(1, 0)
+    fovCorner.Parent = fovFrame
+
+    local fovStroke = Instance.new("UIStroke")
+    fovStroke.Color = Color3.fromRGB(255, 255, 150)
+    fovStroke.Thickness = 1.5
+    fovStroke.Parent = fovFrame
+
+    local miniFrame = Instance.new("Frame")
+    miniFrame.Name = "WButtonFrame"
+    miniFrame.Size = UDim2.fromOffset(56, 56)
+    miniFrame.Position = UDim2.new(0.85, 0, 0.35, 0)
+    miniFrame.BackgroundColor3 = Color3.fromRGB(8, 18, 38)
+    miniFrame.BorderSizePixel = 0
+    miniFrame.Active = true
+    miniFrame.ZIndex = 10
+    miniFrame.Parent = screenGui
+
+    local frameCorner = Instance.new("UICorner")
+    frameCorner.CornerRadius = UDim.new(0, 12)
+    frameCorner.Parent = miniFrame
+
+    local frameStroke = Instance.new("UIStroke")
+    frameStroke.Color = Color3.fromRGB(65, 175, 255)
+    frameStroke.Thickness = 2
+    frameStroke.Parent = miniFrame
+
+    local aimButton = Instance.new("ImageButton")
+    aimButton.Name = "WImageButton"
+    aimButton.Size = UDim2.fromScale(1, 1)
+    aimButton.BackgroundTransparency = 1
+    aimButton.Image = MINI_IMAGE
+    aimButton.ScaleType = Enum.ScaleType.Crop
+    aimButton.AutoButtonColor = false
+    aimButton.ZIndex = 11
+    aimButton.Parent = miniFrame
+
+    local actionCircleBtn = Instance.new("TextButton")
+    actionCircleBtn.Name = "ActionEmojiButton"
+    actionCircleBtn.Size = UDim2.fromOffset(50, 50)
+    actionCircleBtn.Position = UDim2.new(0, -65, 0, 0)
+    actionCircleBtn.BackgroundColor3 = Color3.fromRGB(20, 35, 60)
+    actionCircleBtn.Text = "🎯"
+    actionCircleBtn.TextSize = 22
+    actionCircleBtn.Visible = false
+    actionCircleBtn.ZIndex = 15
+    actionCircleBtn.Parent = miniFrame
+
+    local circleCorner = Instance.new("UICorner")
+    circleCorner.CornerRadius = UDim.new(1, 0)
+    circleCorner.Parent = actionCircleBtn
+
+    local circleStroke = Instance.new("UIStroke")
+    circleStroke.Color = Color3.fromRGB(255, 215, 0)
+    circleStroke.Thickness = 2
+    circleStroke.Parent = actionCircleBtn
+
+    actionCircleBtn.MouseButton1Click:Connect(function()
+        pcall(function()
+            local char = LocalPlayer.Character
+            local tool = char and (char:FindFirstChildOfClass("Tool"))
+            if tool then
+                tool:Activate()
+            end
+        end)
+    end)
+
+    local pressActive = false
+    local pressMoved = false
+    local pressStartTime = 0
+    local dragStart = nil
+    startPos = nil
+    local activeTouch = nil
+
+    aimButton.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            pressActive = true
+            pressMoved = false
+            pressStartTime = os.clock()
+            dragStart = input.Position
+            startPos = miniFrame.Position
+            activeTouch = input.UserInputType == Enum.UserInputType.Touch and input or nil
+        end
+    end)
+
+    UIS.InputChanged:Connect(function(input)
+        if not pressActive or not dragStart or not startPos then return end
+        local isRelevant = input.UserInputType == Enum.UserInputType.MouseMovement or (activeTouch and input == activeTouch)
+        if not isRelevant then return end
+
+        local delta = input.Position - dragStart
+        if delta.Magnitude > 6 then pressMoved = true end
+
+        if pressMoved and os.clock() - pressStartTime >= 0.3 then
+            miniFrame.Position = UDim2.new(
+                startPos.X.Scale, startPos.X.Offset + delta.X,
+                startPos.Y.Scale, startPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+
+    UIS.InputEnded:Connect(function(input)
+        local ended = input.UserInputType == Enum.UserInputType.MouseButton1 or (activeTouch and input == activeTouch)
+        if not pressActive or not ended then return end
+        local heldFor = os.clock() - pressStartTime
+        pressActive = false
+        activeTouch = nil
+
+        if not pressMoved and heldFor < 0.3 then
+            actionCircleBtn.Visible = not actionCircleBtn.Visible
+        end
+    end)
+    -- =====================================================
+-- Script Name : w.404 | MM2 Hub v2.0 (Part 3/4)
+-- =====================================================
+
+    local function getPlayerRole(player)
+        local char = player.Character
+        local backpack = player:FindFirstChildOfClass("Backpack")
+        local function hasItem(name)
+            return (char and char:FindFirstChild(name)) or (backpack and backpack:FindFirstChild(name))
+        end
+        if hasItem("Knife") then
+            return "ฆาตกร", Color3.fromRGB(255, 30, 30)
+        elseif hasItem("Gun") or hasItem("Revolver") then
+            return "นายอำเภอ", Color3.fromRGB(30, 144, 255)
+        else
+            return "คนธรรมดา", Color3.fromRGB(46, 204, 113)
+        end
+    end
+
+    -- Tab 1: Aimbot
+    local combatTab = Window:MakeTab({Name = "ระบบต่อสู้", Icon = "rbxassetid://4483345998", PremiumOnly = false})
+    combatTab:AddSection({Name = "ตั้งค่า Aimbot & Lock Target"})
+    combatTab:AddDropdown({
+        Name = "รูปแบบ Aimbot",
+        Default = "ปิด",
+        Options = {"ปิด", "หันตาม", "ไม่ต้องหันตาม"},
+        Callback = function(value)
+            aimbotMode = value
+            lockTargetEnabled = (value ~= "ปิด")
+        end
+    })
+    combatTab:AddToggle({
+        Name = "ตรวจสอบกำแพง (Wall Check)",
+        Default = true,
+        Callback = function(value) wallCheckEnabled = value end
+    })
+
+    -- Tab 2: FOV
+    local fovTab = Window:MakeTab({Name = "ระบบ FOV", Icon = "rbxassetid://4483345998", PremiumOnly = false})
+    fovTab:AddToggle({
+        Name = "แสดงวง FOV",
+        Default = false,
+        Callback = function(value)
+            fovVisible = value
+            fovFrame.Visible = value
+        end
+    })
+    fovTab:AddSlider({
+        Name = "ขนาดวง FOV",
+        Min = 50,
+        Max = 500,
+        Default = 150,
+        Increment = 5,
+        Callback = function(value)
+            fovRadius = value
+            fovFrame.Size = UDim2.fromOffset(value * 2, value * 2)
+        end
+    })
+
+    -- Tab 3: ESP
+    local espTab = Window:MakeTab({Name = "ระบบ ESP", Icon = "rbxassetid://4483345998", PremiumOnly = false})
+    espTab:AddToggle({
+        Name = "เปิด ESP (วิเคราะห์โค้ดบทบาท)",
+        Default = false,
+        Callback = function(value)
+            espEnabled = value
+            if not value then
+                for _, h in pairs(espHighlights) do if h then h:Destroy() end end
+                for _, b in pairs(espBillboards) do if b then b:Destroy() end end
+                espHighlights = {}
+                espBillboards = {}
+            end
+        end
+    })
+
+    -- Tab 4: ตัวช่วย & Teleport/Kick
+    local utilTab = Window:MakeTab({Name = "ตัวช่วย", Icon = "rbxassetid://4483345998", PremiumOnly = false})
+
+    utilTab:AddSection({Name = "การเคลื่อนไหว & บิน"})
+    utilTab:AddToggle({
+        Name = "เปิดบิน (Fly)",
+        Default = false,
+        Callback = function(value) flyEnabled = value end
+    })
+    utilTab:AddSlider({
+        Name = "ความเร็วบิน",
+        Min = 1,
+        Max = 200,
+        Default = 50,
+        Increment = 1,
+        Callback = function(value) flySpeed = value end
+    })
+    utilTab:AddToggle({
+        Name = "กระโดดอินฟินิตี้ (Inf Jump)",
+        Default = false,
+        Callback = function(value) infJumpEnabled = value end
+    })
+    utilTab:AddSlider({
+        Name = "ความสูงกระโดดปกติ",
+        Min = 1,
+        Max = 100,
+        Default = 50,
+        Increment = 1,
+        Callback = function(value)
+            jumpPowerVal = value
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
+                LocalPlayer.Character:FindFirstChildOfClass("Humanoid").JumpPower = value
+            end
+        end
+    })
+    utilTab:AddToggle({
+        Name = "เดินทะลุ (Noclip)",
+        Default = false,
+        Callback = function(value) noclipEnabled = value end
+    })
+    utilTab:AddToggle({
+        Name = "วาร์ปไปเก็บปืนอัตโนมัติ",
+        Default = false,
+        Callback = function(value) autoGunEnabled = value end
+    })
+
+    utilTab:AddSection({Name = "ระบบวาร์ป & เตะผู้เล่น"})
+    
+    local targetDropdownList = {}
+    local function updatePlayerDropdown()
+        targetDropdownList = {}
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer then
+                table.insert(targetDropdownList, p.Name)
+            end
+        end
+    end
+    updatePlayerDropdown()
+
+    local selectedTargetPlayer = ""
+    utilTab:AddDropdown({
+        Name = "รายชื่อผู้เล่น",
+        Default = "",
+        Options = targetDropdownList,
+        Callback = function(value) selectedTargetPlayer = value end
+    })
+
+    utilTab:AddButton({
+        Name = "🔄 รีเซ็ตรายชื่อผู้เล่น",
+        Callback = function()
+            updatePlayerDropdown()
+        end
+    })
+
+    utilTab:AddButton({
+        Name = "🚀 วาร์ปไปหาผู้เล่นที่เลือก",
+        Callback = function()
+            local target = Players:FindFirstChild(selectedTargetPlayer)
+            if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+                LocalPlayer.Character.HumanoidRootPart.CFrame = target.Character.HumanoidRootPart.CFrame
+            end
+        end
+    })
+    -- =====================================================
+-- Script Name : w.404 | MM2 Hub v2.0 (Part 4/4)
+-- =====================================================
+
+    local function kickPlayerOut(filterRole)
+        local char = LocalPlayer.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        if not root then return end
+        local originalPos = root.CFrame
+
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                local role = getPlayerRole(p)
+                if filterRole == "All" or role == filterRole then
+                    local targetRoot = p.Character.HumanoidRootPart
+                    for i = 1, 10 do
+                        root.CFrame = targetRoot.CFrame + Vector3.new(0, 3, 0)
+                        task.wait(0.05)
+                    end
+                end
+            end
+        end
+        task.wait(0.1)
+        root.CFrame = originalPos
+    end
+
+    utilTab:AddButton({
+        Name = "🌪️ เตะคนออกจากแมพ (ทุกคน)",
+        Callback = function() kickPlayerOut("All") end
+    })
+    utilTab:AddButton({
+        Name = "🛡️ เตะคนธรรมดา ออกแมพ",
+        Callback = function() kickPlayerOut("คนธรรมดา") end
+    })
+    utilTab:AddButton({
+        Name = "⭐ เตะนายอำเภอ ออกแมพ",
+        Callback = function() kickPlayerOut("นายอำเภอ") end
+    })
+    utilTab:AddButton({
+        Name = "🔪 เตะฆาตกร ออกแมพ",
+        Callback = function() kickPlayerOut("ฆาตกร") end
+    })
+    utilTab:AddButton({
+        Name = "⚡ Kill All (เฉพาะฆาตกร)",
+        Callback = function()
+            local char = LocalPlayer.Character
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+            if not root then return end
+            local orig = root.CFrame
+
+            for _, p in ipairs(Players:GetPlayers()) do
+                local role = getPlayerRole(p)
+                if role == "ฆาตกร" and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                    root.CFrame = p.Character.HumanoidRootPart.CFrame
+                    task.wait(0.05)
+                end
+            end
+            task.wait(0.1)
+            root.CFrame = orig
+        end
+    })
+
+    -- Render Loop
+    RunService.RenderStepped:Connect(function()
+        if fovVisible then
+            local camera = workspace.CurrentCamera
+            if camera then
+                local pos = UIS.TouchEnabled and (camera.ViewportSize / 2) or (UIS:GetMouseLocation() - GuiService:GetGuiInset())
+                fovFrame.Position = UDim2.fromOffset(pos.X, pos.Y)
+                if fovColorMode == "สายรุ้ง" then
+                    fovStroke.Color = Color3.fromHSV((os.clock() % 1.2) / 1.2, 0.8, 1)
+                end
+            end
+        end
+
+        if espEnabled then
+            for _, player in ipairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer and player.Character then
+                    local char = player.Character
+                    local hrp = char:FindFirstChild("HumanoidRootPart")
+                    if hrp then
+                        local roleName, roleColor = getPlayerRole(player)
+                        
+                        local hl = espHighlights[player]
+                        if not hl then
+                            hl = Instance.new("Highlight")
+                            hl.Parent = char
+                            espHighlights[player] = hl
+                        end
+                        hl.Adornee = char
+                        hl.FillColor = roleColor
+                        hl.OutlineColor = Color3.new(1, 1, 1)
+                        hl.FillTransparency = 0.5
+
+                        local bill = espBillboards[player]
+                        if not bill then
+                            bill = Instance.new("BillboardGui")
+                            bill.Size = UDim2.fromOffset(100, 40)
+                            bill.AlwaysOnTop = true
+                            bill.StudsOffset = Vector3.new(0, 3, 0)
+                            
+                            local lbl = Instance.new("TextLabel")
+                            lbl.Name = "Info"
+                            lbl.Size = UDim2.fromScale(1, 1)
+                            lbl.BackgroundTransparency = 1
+                            lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+                            lbl.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+                            lbl.TextStrokeTransparency = 0
+                            lbl.TextSize = 13
+                            lbl.Font = Enum.Font.GothamBold
+                            lbl.Parent = bill
+                            
+                            bill.Parent = char
+                            espBillboards[player] = bill
+                        end
+                        local textLbl = bill:FindFirstChild("Info")
+                        if textLbl then
+                            textLbl.Text = player.Name .. "\n[" .. roleName .. "]"
+                        end
+                    end
+                end
+            end
+        end
+
+        if aimbotMode ~= "ปิด" then
+            local camera = workspace.CurrentCamera
+            if camera then
+                local center = UIS.TouchEnabled and (camera.ViewportSize / 2) or (UIS:GetMouseLocation() - GuiService:GetGuiInset())
+                local closestPart = nil
+                local shortestDist = fovRadius
+
+                for _, p in ipairs(Players:GetPlayers()) do
+                    if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                        local rp = p.Character.HumanoidRootPart
+                        local hum = p.Character:FindFirstChildOfClass("Humanoid")
+                        if not hum or hum.Health > 0 then
+                            local screenPos, onScreen = camera:WorldToViewportPoint(rp.Position)
+                            if onScreen then
+                                local dist = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
+                                if dist < shortestDist then
+                                    shortestDist = dist
+                                    closestPart = rp
+                                end
+                            end
+                        end
+                    end
+                end
+
+                if closestPart then
+                    if aimbotMode == "หันตาม" then
+                        camera.CFrame = camera.CFrame:Lerp(CFrame.new(camera.CFrame.Position, closestPart.Position), 0.4)
+                    elseif aimbotMode == "ไม่ต้องหันตาม" then
+                        pcall(function()
+                            local tool = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
+                            if tool and tool:FindFirstChild("Handle") then
+                                tool.Handle.CFrame = CFrame.new(tool.Handle.Position, closestPart.Position)
+                            end
+                        end)
+                    end
+                end
+            end
+        end
+
+        if autoGunEnabled then
+            pcall(function()
+                for _, obj in ipairs(workspace:GetChildren()) do
+                    if obj.Name == "GunDrop" or obj.Name == "RevolverDrop" then
+                        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                            if obj:IsA("BasePart") then
+                                LocalPlayer.Character.HumanoidRootPart.CFrame = obj.CFrame
+                            elseif obj:IsA("Model") and obj.PrimaryPart then
+                                LocalPlayer.Character.HumanoidRootPart.CFrame = obj.PrimaryPart.CFrame
+                            end
+                        end
+                    end
+                end
+            end)
+        end
+    end)
+
+    UIS.JumpRequest:Connect(function()
+        if infJumpEnabled and LocalPlayer.Character then
+            local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
+        end
+    end)
+
+    RunService.Stepped:Connect(function()
+        if noclipEnabled and LocalPlayer.Character then
+            for _, part in ipairs(LocalPlayer.Character:GetDescendants()) do
+                if part:IsA("BasePart") then part.CanCollide = false end
+            end
+        end
+    end)
+
+    OrionLib:Init()
+    showStatus("w.404 | MM2 Hub v2.0 โหลดสำเร็จเรียบร้อย!", false)
+end)
+
+if not setupOk then
+    warn("W404 ERROR: " .. tostring(setupError))
+    showStatus("เกิดข้อผิดพลาดในการโหลดระบบ", true)
+end
