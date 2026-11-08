@@ -1,5 +1,5 @@
 -- =====================================================
--- Script Name : w.404 | MM2 Hub v3.3 (Part 1/4)
+-- Script Name : w.404 | MM2 Hub v3.7 (Part 1/4)
 -- =====================================================
 
 local ORION_URL = "https://raw.githubusercontent.com/Qanuir/orion-ui/refs/heads/main/source.lua"
@@ -59,7 +59,7 @@ local setupOk, setupError = pcall(function()
     local bodyGyro, bodyVel = nil, nil
 
     local Window = OrionLib:MakeWindow({
-        Name = "w.404 | MM2 Hub v3.3",
+        Name = "w.404 | MM2 Hub v3.7",
         HidePremium = false,
         IntroEnabled = false
     })
@@ -96,7 +96,7 @@ local setupOk, setupError = pcall(function()
         end)
     end)
 -- =====================================================
--- Script Name : w.404 | MM2 Hub v3.3 (Part 2/4)
+-- Script Name : w.404 | MM2 Hub v3.7 (Part 2/4)
 -- =====================================================
 
     -- วง FOV
@@ -138,20 +138,23 @@ local setupOk, setupError = pcall(function()
     dotStroke.Thickness = 1
     dotStroke.Parent = centerDot
 
-    -- ตรวจสอบบทบาทผู้เล่น MM2
+    -- 🔍 ระบบตรวจสอบบทบาท MM2 แบบเรียลไทม์จากระบบเกมโดยตรง
     local function getPlayerRole(player)
-        local char = player.Character
-        local backpack = player:FindFirstChildOfClass("Backpack")
-        local function hasItem(name)
-            return (char and char:FindFirstChild(name)) or (backpack and backpack:FindFirstChild(name))
-        end
-        if hasItem("Knife") then
-            return "ฆาตกร", Color3.fromRGB(255, 30, 30)
-        elseif hasItem("Gun") or hasItem("Revolver") then
-            return "นายอำเภอ", Color3.fromRGB(30, 144, 255)
-        else
-            return "คนธรรมดา", Color3.fromRGB(46, 204, 113)
-        end
+        pcall(function()
+            if player.Character then
+                local backpack = player:FindFirstChildOfClass("Backpack")
+                local char = player.Character
+                local hasKnife = char:FindFirstChild("Knife") or (backpack and backpack:FindFirstChild("Knife"))
+                local hasGun = char:FindFirstChild("Gun") or char:FindFirstChild("Revolver") or (backpack and (backpack:FindFirstChild("Gun") or backpack:FindFirstChild("Revolver")))
+                
+                if hasKnife then
+                    return "ฆาตกร", Color3.fromRGB(255, 30, 30)
+                elseif hasGun then
+                    return "นายอำเภอ", Color3.fromRGB(30, 144, 255)
+                end
+            end
+        end)
+        return "คนธรรมดา", Color3.fromRGB(46, 204, 113)
     end
 
     -- Tab 1: ระบบต่อสู้
@@ -189,7 +192,7 @@ local setupOk, setupError = pcall(function()
     fovTab:AddDropdown({
         Name = "สีวง FOV",
         Default = "เหลืองอ่อน",
-        Options = {"เหลืองอ่อน", "สายรุ้ง (เร็ว)"},
+        Options = {"เหลืองอ่อน", "สายรุ้ง (ช้า)"},
         Callback = function(value) fovColorMode = value end
     })
     fovTab:AddToggle({
@@ -204,7 +207,7 @@ local setupOk, setupError = pcall(function()
     -- Tab 3: ระบบ ESP
     local espTab = Window:MakeTab({Name = "ระบบ ESP", Icon = "rbxassetid://4483345998"})
     espTab:AddToggle({
-        Name = "เปิด ESP (ชื่อสีขาวขอบดำ + บทบาท)",
+        Name = "เปิด ESP (เรียลไทม์ / ตรวจจับทันที)",
         Default = false,
         Callback = function(value)
             espEnabled = value
@@ -217,33 +220,32 @@ local setupOk, setupError = pcall(function()
         end
     })
 
-    -- Tab 4: 🎨 ธีมสี UI (12 สีเปลี่ยนสดทันที)
-    local colorTab = Window:MakeTab({Name = "🎨 ธีมสี (12 สี)", Icon = "rbxassetid://4483345998"})
-    colorTab:AddSection({Name = "เลือกโทนสี UI เมนูหลัก"})
+    -- Tab 4: 🎨 ธีมสี UI (12 สีมาตรฐาน)
+    local colorTab = Window:MakeTab({Name = "🎨 ธีมสี UI", Icon = "rbxassetid://4483345998"})
+    colorTab:AddSection({Name = "เลือกสี UI หลัก (12 สีมาตรฐาน)"})
     
     colorTab:AddDropdown({
         Name = "เลือกสี UI",
-        Default = "🥛 นมสตอเบอร์รี่ (Pink Pastel)",
+        Default = "🔵 น้ำเงินเข้ม (Navy Blue)",
         Options = {
-            "🥛 นมสตอเบอร์รี่ (Pink Pastel)", "🍼 นมกล้วย (Banana Pastel)", "🧋 ชานม (Milk Tea)", 
-            "🟣 นมเผือก (Taro Pastel)", "💙 นมบลูเบอร์รี่ (Blueberry Pastel)", "🟢 นมมัทฉะ (Matcha Pastel)", 
-            "⚫ ธีมนิลกาฬ (Dark Midnight)", "🔴 แดงเพลิง (Crimson Red)", "🟡 ทองอร่าม (Royal Gold)", 
-            "🟣 ม่วงนีออน (Cyber Neon)", "🟢 เขียวมรกต (Emerald Green)", "⚪ ขาวบริสุทธิ์ (Pure White)"
+            "🔵 น้ำเงินเข้ม (Navy Blue)", "🔴 แดงสด (Red)", "🟢 เขียว (Green)", "🟡 เหลือง (Yellow)", 
+            "🟣 ม่วง (Purple)", "🟠 ส้ม (Orange)", "🩷 ชมพู (Pink)", "🩵 ฟ้า (Cyan)", 
+            "🟤 น้ำตาล (Brown)", "⚫ ดำสนิท (Dark Black)", "⚪ เทาอ่อน (Light Gray)", "🤍 ขาวบริสุทธิ์ (Pure White)"
         },
         Callback = function(value)
             pcall(function()
-                local targetColor = Color3.fromRGB(255, 182, 193)
-                if value:find("กล้วย") then targetColor = Color3.fromRGB(255, 239, 150)
-                elseif value:find("ชานม") then targetColor = Color3.fromRGB(210, 180, 140)
-                elseif value:find("เผือก") then targetColor = Color3.fromRGB(216, 191, 216)
-                elseif value:find("บลูเบอร์รี่") then targetColor = Color3.fromRGB(173, 216, 230)
-                elseif value:find("มัทฉะ") then targetColor = Color3.fromRGB(152, 251, 152)
-                elseif value:find("นิลกาฬ") then targetColor = Color3.fromRGB(25, 25, 35)
-                elseif value:find("แดงเพลิง") then targetColor = Color3.fromRGB(180, 30, 30)
-                elseif value:find("ทองอร่าม") then targetColor = Color3.fromRGB(218, 165, 32)
-                elseif value:find("ม่วงนีออน") then targetColor = Color3.fromRGB(138, 43, 226)
-                elseif value:find("เขียวมรกต") then targetColor = Color3.fromRGB(46, 139, 87)
-                elseif value:find("ขาวบริสุทธิ์") then targetColor = Color3.fromRGB(240, 240, 240) end
+                local targetColor = Color3.fromRGB(30, 40, 70)
+                if value:find("แดงสด") then targetColor = Color3.fromRGB(180, 30, 30)
+                elseif value:find("เขียว") then targetColor = Color3.fromRGB(30, 120, 50)
+                elseif value:find("เหลือง") then targetColor = Color3.fromRGB(180, 150, 20)
+                elseif value:find("ม่วง") then targetColor = Color3.fromRGB(100, 30, 140)
+                elseif value:find("ส้ม") then targetColor = Color3.fromRGB(200, 100, 20)
+                elseif value:find("ชมพู") then targetColor = Color3.fromRGB(200, 80, 120)
+                elseif value:find("ฟ้า") then targetColor = Color3.fromRGB(30, 130, 180)
+                elseif value:find("น้ำตาล") then targetColor = Color3.fromRGB(100, 60, 40)
+                elseif value:find("ดำสนิท") then targetColor = Color3.fromRGB(15, 15, 20)
+                elseif value:find("เทาอ่อน") then targetColor = Color3.fromRGB(80, 80, 90)
+                elseif value:find("ขาวบริสุทธิ์") then targetColor = Color3.fromRGB(220, 220, 230) end
 
                 for _, gui in ipairs(PlayerGui:GetChildren()) do
                     if gui.Name == "Orion" then
@@ -258,7 +260,7 @@ local setupOk, setupError = pcall(function()
         end
     })
 -- =====================================================
--- Script Name : w.404 | MM2 Hub v3.3 (Part 3/4)
+-- Script Name : w.404 | MM2 Hub v3.7 (Part 3/4)
 -- =====================================================
 
     -- Tab 5: ตัวช่วย (Utilities)
@@ -276,7 +278,7 @@ local setupOk, setupError = pcall(function()
 
     utilTab:AddSection({Name = "การเคลื่อนไหว & บิน (คืนค่าได้สมบูรณ์)"})
     
-    -- ระบบบิน (เปิด/ปิด คืนค่าแรงโน้มถ่วงสมบูรณ์)
+    -- ระบบเปิด-ปิดบิน (Fly พร้อมท่าทางและคืนค่า)
     utilTab:AddToggle({
         Name = "เปิดบิน (Fly)",
         Default = false,
@@ -301,16 +303,20 @@ local setupOk, setupError = pcall(function()
                     bodyVel.Parent = hrp
                     
                     flyConnection = RunService.RenderStepped:Connect(function()
-                        if not flyEnabled or not hrp then return end
+                        if not flyEnabled or not hrp or not hum then return end
                         local cam = Workspace.CurrentCamera
-                        local dir = Vector3.zero
-                        if UIS:IsKeyDown(Enum.KeyCode.W) or UIS:IsKeyDown(Enum.KeyCode.Up) then dir = dir + cam.CFrame.LookVector end
-                        if UIS:IsKeyDown(Enum.KeyCode.S) or UIS:IsKeyDown(Enum.KeyCode.Down) then dir = dir - cam.CFrame.LookVector end
-                        if UIS:IsKeyDown(Enum.KeyCode.A) or UIS:IsKeyDown(Enum.KeyCode.Left) then dir = dir - cam.CFrame.RightVector end
-                        if UIS:IsKeyDown(Enum.KeyCode.D) or UIS:IsKeyDown(Enum.KeyCode.Right) then dir = dir + cam.CFrame.RightVector end
+                        local moveDir = Vector3.zero
+                        if UIS:IsKeyDown(Enum.KeyCode.W) or UIS:IsKeyDown(Enum.KeyCode.Up) then moveDir = moveDir + cam.CFrame.LookVector end
+                        if UIS:IsKeyDown(Enum.KeyCode.S) or UIS:IsKeyDown(Enum.KeyCode.Down) then moveDir = moveDir - cam.CFrame.LookVector end
+                        if UIS:IsKeyDown(Enum.KeyCode.A) or UIS:IsKeyDown(Enum.KeyCode.Left) then moveDir = moveDir - cam.CFrame.RightVector end
+                        if UIS:IsKeyDown(Enum.KeyCode.D) or UIS:IsKeyDown(Enum.KeyCode.Right) then moveDir = moveDir + cam.CFrame.RightVector end
                         
-                        bodyVel.Velocity = dir * flySpeed
-                        bodyGyro.CFrame = cam.CFrame
+                        bodyVel.Velocity = moveDir * flySpeed
+                        if moveDir.Magnitude > 0 then
+                            bodyGyro.CFrame = CFrame.new(hrp.Position, hrp.Position + moveDir) * CFrame.Angles(math.rad(-70), 0, 0)
+                        else
+                            bodyGyro.CFrame = CFrame.new(hrp.Position, hrp.Position + cam.CFrame.LookVector)
+                        end
                     end)
                 end
             else
@@ -322,7 +328,10 @@ local setupOk, setupError = pcall(function()
                         if v:IsA("BodyVelocity") or v:IsA("BodyGyro") then v:Destroy() end
                     end
                 end
-                if hum then hum.PlatformStand = false end
+                if hum then
+                    hum.PlatformStand = false
+                    hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+                end
             end
         end
     })
@@ -333,7 +342,7 @@ local setupOk, setupError = pcall(function()
         Callback = function(value) flySpeed = value end
     })
 
-    -- ระบบกระโดดอินฟินิตี้ (เปิด/ปิด คืนค่าได้)
+    -- ระบบกระโดดอินฟินิตี้ (Inf Jump)
     utilTab:AddToggle({
         Name = "กระโดดอินฟินิตี้ (Inf Jump)",
         Default = false,
@@ -357,7 +366,6 @@ local setupOk, setupError = pcall(function()
         end
     })
 
-    -- ความสูงกระโดดปกติ
     utilTab:AddSlider({
         Name = "ความสูงกระโดดปกติ (1-100)",
         Min = 1, Max = 100, Default = 50, Increment = 1,
@@ -370,7 +378,7 @@ local setupOk, setupError = pcall(function()
         end
     })
 
-    -- Noclip (เดินทะลุกำแพง คืนค่าการชนเมื่อปิด)
+    -- Noclip เดินทะลุ
     utilTab:AddToggle({
         Name = "เดินทะลุ (Noclip)",
         Default = false,
@@ -384,11 +392,45 @@ local setupOk, setupError = pcall(function()
         end
     })
 
-    -- วาร์ปเก็บปืนเฉพาะตอนตกพื้น
+    utilTab:AddSection({Name = "ระบบปืน & วาร์ปเก็บปืนอัตโนมัติ"})
+    
     utilTab:AddToggle({
-        Name = "วาร์ปไปเก็บปืนเฉพาะตอนตกพื้น",
+        Name = "วาร์ปไปเก็บปืนอัตโนมัติ (เฉพาะตอนตกพื้น)",
         Default = false,
         Callback = function(value) autoGunEnabled = value end
+    })
+
+    -- 🎯 ปุ่มวาร์ปไปเก็บปืนและกลับจุดเดิมทันที
+    utilTab:AddButton({
+        Name = "🔫 วาร์ปไปเก็บปืนแล้วกลับจุดเดิมทันที",
+        Callback = function()
+            pcall(function()
+                local char = LocalPlayer.Character
+                local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                if not hrp then return end
+                
+                local originalPos = hrp.CFrame
+                local foundGun = false
+                
+                for _, obj in ipairs(Workspace:GetChildren()) do
+                    if obj.Name == "GunDrop" or obj.Name == "RevolverDrop" then
+                        foundGun = true
+                        if obj:IsA("BasePart") then
+                            hrp.CFrame = obj.CFrame
+                        elseif obj:IsA("Model") and obj.PrimaryPart then
+                            hrp.CFrame = obj.PrimaryPart.CFrame
+                        end
+                        task.wait(0.1)
+                        break
+                    end
+                end
+                
+                if foundGun then
+                    task.wait(0.15)
+                    hrp.CFrame = originalPos
+                end
+            end)
+        end
     })
 
     utilTab:AddSection({Name = "ระบบวาร์ป & เลือกผู้เล่น"})
@@ -471,7 +513,7 @@ local setupOk, setupError = pcall(function()
         Callback = function() flingPlayer("ฆาตกร") end
     })
 
-    -- ⚡ Kill All เฉพาะฆาตกร (เสี้ยววินาที)
+    -- ⚡ Kill All เฉพาะฆาตกร
     utilTab:AddButton({
         Name = "⚡ Kill All (เฉพาะฆาตกร)",
         Callback = function()
@@ -497,7 +539,7 @@ local setupOk, setupError = pcall(function()
         end
     })
 -- =====================================================
--- Script Name : w.404 | MM2 Hub v3.3 (Part 4/4)
+-- Script Name : w.404 | MM2 Hub v3.7 (Part 4/4)
 -- =====================================================
 
     -- ลูปหลักการทำงานระบบ
@@ -507,14 +549,15 @@ local setupOk, setupError = pcall(function()
             if camera then
                 local pos = UIS.TouchEnabled and (camera.ViewportSize / 2) or (UIS:GetMouseLocation() - GuiService:GetGuiInset())
                 fovFrame.Position = UDim2.fromOffset(pos.X, pos.Y)
-                if fovColorMode == "สายรุ้ง (เร็ว)" then
-                    fovStroke.Color = Color3.fromHSV((os.clock() * 3) % 1, 1, 1)
+                if fovColorMode == "สายรุ้ง (ช้า)" then
+                    fovStroke.Color = Color3.fromHSV((os.clock() / 10) % 1, 1, 1)
                 else
                     fovStroke.Color = Color3.fromRGB(255, 255, 150)
                 end
             end
         end
 
+        -- ระบบ ESP แบบเรียลไทม์
         if espEnabled then
             for _, player in ipairs(Players:GetPlayers()) do
                 if player ~= LocalPlayer and player.Character then
@@ -522,6 +565,7 @@ local setupOk, setupError = pcall(function()
                     local hrp = char:FindFirstChild("HumanoidRootPart")
                     if hrp then
                         local roleName, roleColor = getPlayerRole(player)
+                        
                         local hl = espHighlights[player]
                         if not hl then
                             hl = Instance.new("Highlight")
@@ -640,4 +684,3 @@ end)
 if not setupOk then
     warn("Error: " .. tostring(setupError))
 end
-  
